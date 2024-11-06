@@ -18,7 +18,7 @@
             max-width: 1200px;
             margin: 0 auto;
         }
-        h1, h2 {
+        h1, h2, h3 {
             color: #333;
         }
         .property-grid {
@@ -64,7 +64,7 @@
             color: red;
         }
         button {
-            background-color: #000000;
+            background-color: #4a90e2;
             color: #fff;
             border: none;
             border-radius: 15px;
@@ -77,7 +77,7 @@
             transition: background-color 0.3s ease, transform 0.1s ease;
         }
         button:hover {
-            background-color: #313131;
+            background-color: #357abd;
             transform: translateY(-2px);
         }
         button:active {
@@ -162,7 +162,7 @@
             position: absolute;
             top: 10px;
             right: 10px;
-            background-color: #000000;
+            background-color: #4a90e2;
             color: white;
             border: none;
             border-radius: 50%;
@@ -174,6 +174,33 @@
             align-items: center;
             justify-content: center;
         }
+        .delete-button {
+            background-color: #f44336;
+        }
+        .delete-button:hover {
+            background-color: #d32f2f;
+        }
+        .confirmation-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        .confirmation-buttons button {
+            flex: 1;
+            margin: 0 10px;
+        }
+        .data-buttons {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .data-buttons button {
+            flex: 1;
+            margin: 0 10px;
+        }
+        #fileInput {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -182,6 +209,11 @@
         <div id="propertyGrid" class="property-grid"></div>
         <button id="addPropertyBtn">Add Property</button>
         <button id="addBillBtn">Add Bill</button>
+        <div class="data-buttons">
+            <button id="exportDataBtn">Export Data</button>
+            <button id="importDataBtn">Import Data</button>
+            <input type="file" id="fileInput" accept=".json">
+        </div>
     </div>
 
     <div id="addPropertyModal" class="modal">
@@ -243,7 +275,19 @@
                 <h3>Bills:</h3>
                 <div id="editBillsList"></div>
                 <button type="submit">Save Changes</button>
+                <button type="button" id="deletePropertyBtn" class="delete-button">Delete Property</button>
             </form>
+        </div>
+    </div>
+
+    <div id="confirmDeleteModal" class="modal">
+        <div class="modal-content">
+            <h2>Confirm Deletion</h2>
+            <p>Are you sure you want to delete this property? This action cannot be undone.</p>
+            <div class="confirmation-buttons">
+                <button id="confirmDeleteBtn">Yes, Delete</button>
+                <button id="cancelDeleteBtn">Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -255,7 +299,7 @@
         }
 
         function loadData() {
-            const savedData = localStorage.getItem('propertyBillTrackerData');
+            const savedData = localStorage.setItem('propertyBillTrackerData');
             if (savedData) {
                 properties = JSON.parse(savedData);
             }
@@ -395,6 +439,10 @@
                 modal.style.display = 'none';
             };
 
+            document.getElementById('deletePropertyBtn').onclick = () => {
+                showConfirmDeleteModal(propertyId);
+            };
+
             modal.style.display = 'block';
         }
 
@@ -415,11 +463,68 @@
             saveData();
         }
 
+        function showConfirmDeleteModal(propertyId) {
+            const modal = document.getElementById('confirmDeleteModal');
+            const confirmBtn = document.getElementById('confirmDeleteBtn');
+            const cancelBtn = document.getElementById('cancelDeleteBtn');
+
+            confirmBtn.onclick = () => {
+                deleteProperty(propertyId);
+                modal.style.display = 'none';
+                document.getElementById('editPropertyModal').style.display = 'none';
+            };
+
+            cancelBtn.onclick = () => {
+                modal.style.display = 'none';
+            };
+
+            modal.style.display = 'block';
+        }
+
+        function deleteProperty(propertyId) {
+            properties = properties.filter(p => p.id !== propertyId);
+            renderProperties();
+            updatePropertySelect();
+            saveData();
+        }
+
+        function exportData() {
+            const dataStr = JSON.stringify(properties);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            const exportFileDefaultName = 'property_bill_tracker_data.json';
+
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    properties = importedData;
+                    renderProperties();
+                    updatePropertySelect();
+                    saveData();
+                    alert('Data imported successfully!');
+                } catch (error) {
+                    alert('Error importing data. Please make sure the file is valid JSON.');
+                }
+            };
+
+            reader.readAsText(file);
+        }
+
         // Modal functionality
         const addPropertyModal = document.getElementById('addPropertyModal');
         const addBillModal = document.getElementById('addBillModal');
         const propertyBillsModal = document.getElementById('propertyBillsModal');
         const editPropertyModal = document.getElementById('editPropertyModal');
+        const confirmDeleteModal = document.getElementById('confirmDeleteModal');
         const addPropertyBtn = document.getElementById('addPropertyBtn');
         const addBillBtn = document.getElementById('addBillBtn');
         const closeBtns = document.getElementsByClassName('close');
@@ -433,6 +538,7 @@
                 addBillModal.style.display = "none";
                 propertyBillsModal.style.display = "none";
                 editPropertyModal.style.display = "none";
+                confirmDeleteModal.style.display = "none";
             }
         });
 
@@ -441,6 +547,7 @@
             if (event.target == addBillModal) addBillModal.style.display = "none";
             if (event.target == propertyBillsModal) propertyBillsModal.style.display = "none";
             if (event.target == editPropertyModal) editPropertyModal.style.display = "none";
+            if (event.target == confirmDeleteModal) confirmDeleteModal.style.display = "none";
         }
 
         // Form submissions
@@ -492,6 +599,11 @@
             this.textContent = this.classList.contains('active') ? 'Recurring: On' : 'Recurring: Off';
             document.getElementById('recurringOptions').style.display = this.classList.contains('active') ? 'block' : 'none';
         };
+
+        // Export and Import functionality
+        document.getElementById('exportDataBtn').addEventListener('click', exportData);
+        document.getElementById('importDataBtn').addEventListener('click', () => document.getElementById('fileInput').click());
+        document.getElementById('fileInput').addEventListener('change', importData);
 
         // Initial load and render
         loadData();
