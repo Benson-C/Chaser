@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Bill Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .property-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .property-card {
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 20px;
+            cursor: pointer;
+            transition: box-shadow 0.3s ease;
+        }
+        .property-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .property-card h2 {
+            margin-top: 0;
+            color: #444;
+        }
+        .bill-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .bill-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+        .paid {
+            color: green;
+        }
+        .unpaid {
+            color: red;
+        }
+        button {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover,
+        .close:focus {
+            color: #000;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            margin-top: 10px;
+        }
+        input, select {
+            margin-bottom: 10px;
+            padding: 5px;
+        }
+        .deadline-green {
+            border: 3px solid green;
+        }
+        .deadline-yellow {
+            border: 3px solid yellow;
+        }
+        .deadline-red {
+            border: 3px solid red;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Property Bill Tracker</h1>
+        <div id="propertyGrid" class="property-grid"></div>
+        <button id="addPropertyBtn">Add Property</button>
+        <button id="addBillBtn">Add Bill</button>
+    </div>
+
+    <div id="addPropertyModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Add New Property</h2>
+            <form id="addPropertyForm">
+                <label for="propertyName">Property Name:</label>
+                <input type="text" id="propertyName" required>
+                <button type="submit">Add Property</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="addBillModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Add New Bill</h2>
+            <form id="addBillForm">
+                <label for="billProperty">Property:</label>
+                <select id="billProperty" required></select>
+                <label for="billName">Bill Name:</label>
+                <input type="text" id="billName" required>
+                <label for="billAmount">Amount:</label>
+                <input type="number" id="billAmount" required>
+                <label for="billDueDate">Due Date:</label>
+                <input type="date" id="billDueDate" required>
+                <label for="billRecurring">Recurring:</label>
+                <input type="checkbox" id="billRecurring">
+                <div id="recurringOptions" style="display: none;">
+                    <label for="recurringInterval">Recur every:</label>
+                    <input type="number" id="recurringInterval" min="1" value="1">
+                    <select id="recurringUnit">
+                        <option value="day">Day(s)</option>
+                        <option value="week">Week(s)</option>
+                        <option value="month">Month(s)</option>
+                        <option value="year">Year(s)</option>
+                    </select>
+                </div>
+                <button type="submit">Add Bill</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="propertyBillsModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="propertyBillsTitle"></h2>
+            <div id="propertyBillsList"></div>
+        </div>
+    </div>
+
+    <script>
+        let properties = [];
+
+        function saveData() {
+            localStorage.setItem('propertyBillTrackerData', JSON.stringify(properties));
+        }
+
+        function loadData() {
+            const savedData = localStorage.getItem('propertyBillTrackerData');
+            if (savedData) {
+                properties = JSON.parse(savedData);
+            }
+        }
+
+        function renderProperties() {
+            const propertyGrid = document.getElementById('propertyGrid');
+            propertyGrid.innerHTML = '';
+            properties.forEach(property => {
+                const latestUndueBill = property.bills
+                    .filter(bill => !bill.isPaid)
+                    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))[0];
+
+                const propertyCard = document.createElement('div');
+                propertyCard.className = 'property-card';
+                
+                if (latestUndueBill) {
+                    const dueDate = new Date(latestUndueBill.dueDate);
+                    const today = new Date();
+                    const daysUntilDue = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+
+                    if (daysUntilDue <= 3) {
+                        propertyCard.classList.add('deadline-red');
+                    } else if (daysUntilDue <= 7) {
+                        propertyCard.classList.add('deadline-yellow');
+                    } else {
+                        propertyCard.classList.add('deadline-green');
+                    }
+                }
+
+                propertyCard.innerHTML = `
+                    <h2>${property.name}</h2>
+                    ${latestUndueBill ? `
+                        <p>Latest undue bill: ${latestUndueBill.name}</p>
+                        <p>Amount: $${latestUndueBill.amount}</p>
+                        <p>Due Date: ${latestUndueBill.dueDate}</p>
+                    ` : '<p>No undue bills</p>'}
+                `;
+                propertyCard.onclick = () => showPropertyBills(property);
+                propertyGrid.appendChild(propertyCard);
+            });
+        }
+
+        function showPropertyBills(property) {
+            const modal = document.getElementById('propertyBillsModal');
+            const title = document.getElementById('propertyBillsTitle');
+            const billsList = document.getElementById('propertyBillsList');
+
+            title.textContent = `Bills for ${property.name}`;
+            billsList.innerHTML = '';
+
+            property.bills.forEach(bill => {
+                const billItem = document.createElement('div');
+                billItem.className = 'bill-item';
+                billItem.innerHTML = `
+                    <span>${bill.name} - $${bill.amount} (Due: ${bill.dueDate})</span>
+                    <label>
+                        <input type="checkbox" ${bill.isPaid ? 'checked' : ''} onchange="toggleBillPaid(${property.id}, ${bill.id}, this.checked)">
+                        Paid
+                    </label>
+                `;
+                if (bill.recurring) {
+                    billItem.innerHTML += `<span>(Recurring: Every ${bill.recurringInterval} ${bill.recurringUnit}${bill.recurringInterval > 1 ? 's' : ''})</span>`;
+                }
+                billsList.appendChild(billItem);
+            });
+
+            modal.style.display = 'block';
+        }
+
+        function toggleBillPaid(propertyId, billId, isPaid) {
+            const property = properties.find(p => p.id === propertyId);
+            const bill = property.bills.find(b => b.id === billId);
+            bill.isPaid = isPaid;
+            if (isPaid && bill.recurring) {
+                const nextDueDate = new Date(bill.dueDate);
+                switch (bill.recurringUnit) {
+                    case 'day':
+                        nextDueDate.setDate(nextDueDate.getDate() + bill.recurringInterval);
+                        break;
+                    case 'week':
+                        nextDueDate.setDate(nextDueDate.getDate() + (bill.recurringInterval * 7));
+                        break;
+                    case 'month':
+                        nextDueDate.setMonth(nextDueDate.getMonth() + bill.recurringInterval);
+                        break;
+                    case 'year':
+                        nextDueDate.setFullYear(nextDueDate.getFullYear() + bill.recurringInterval);
+                        break;
+                }
+                const newBill = {...bill, id: Math.max(...property.bills.map(b => b.id)) + 1, dueDate: nextDueDate.toISOString().split('T')[0], isPaid: false};
+                property.bills.push(newBill);
+            }
+            renderProperties();
+            saveData();
+        }
+
+        function updatePropertySelect() {
+            const select = document.getElementById('billProperty');
+            select.innerHTML = properties.map(property => 
+                `<option value="${property.id}">${property.name}</option>`
+            ).join('');
+        }
+
+        // Modal functionality
+        const addPropertyModal = document.getElementById('addPropertyModal');
+        const addBillModal = document.getElementById('addBillModal');
+        const propertyBillsModal = document.getElementById('propertyBillsModal');
+        const addPropertyBtn = document.getElementById('addPropertyBtn');
+        const addBillBtn = document.getElementById('addBillBtn');
+        const closeBtns = document.getElementsByClassName('close');
+
+        addPropertyBtn.onclick = () => addPropertyModal.style.display = "block";
+        addBillBtn.onclick = () => addBillModal.style.display = "block";
+
+        Array.from(closeBtns).forEach(btn => {
+            btn.onclick = function() {
+                addPropertyModal.style.display = "none";
+                addBillModal.style.display = "none";
+                propertyBillsModal.style.display = "none";
+            }
+        });
+
+        window.onclick = function(event) {
+            if (event.target == addPropertyModal) addPropertyModal.style.display = "none";
+            if (event.target == addBillModal) addBillModal.style.display = "none";
+            if (event.target == propertyBillsModal) propertyBillsModal.style.display = "none";
+        }
+
+        // Form submissions
+        document.getElementById('addPropertyForm').onsubmit = function(e) {
+            e.preventDefault();
+            const propertyName = document.getElementById('propertyName').value;
+            const newProperty = {
+                id: properties.length + 1,
+                name: propertyName,
+                bills: []
+            };
+            properties.push(newProperty);
+            renderProperties();
+            updatePropertySelect();
+            addPropertyModal.style.display = "none";
+            this.reset();
+            saveData();
+        };
+
+        document.getElementById('addBillForm').onsubmit = function(e) {
+            e.preventDefault();
+            const propertyId = parseInt(document.getElementById('billProperty').value);
+            const billName = document.getElementById('billName').value;
+            const billAmount = parseFloat(document.getElementById('billAmount').value);
+            const billDueDate = document.getElementById('billDueDate').value;
+            const isRecurring = document.getElementById('billRecurring').checked;
+            const recurringInterval = isRecurring ? parseInt(document.getElementById('recurringInterval').value) : null;
+            const recurringUnit = isRecurring ? document.getElementById('recurringUnit').value : null;
+            const newBill = {
+                id: Math.max(...properties.flatMap(p => p.bills.map(b => b.id)), 0) + 1,
+                name: billName,
+                amount: billAmount,
+                dueDate: billDueDate,
+                isPaid: false,
+                recurring: isRecurring,
+                recurringInterval: recurringInterval,
+                recurringUnit: recurringUnit
+            };
+            const property = properties.find(p => p.id === propertyId);
+            property.bills.push(newBill);
+            renderProperties();
+            addBillModal.style.display = "none";
+            this.reset();
+            saveData();
+        };
+
+        document.getElementById('billRecurring').onchange = function() {
+            document.getElementById('recurringOptions').style.display = this.checked ? 'block' : 'none';
+        };
+
+        // Initial load and render
+        loadData();
+        renderProperties();
+        updatePropertySelect();
+    </script>
+</body>
+</html>
